@@ -19,11 +19,6 @@
 // some number (specified in constructor) of the set of owners (specified in the constructor, modifiable) before the
 // interior is executed.
 contract multiowned {
-    // struct for the status of a pending operation.
-    struct PendingState {
-        uint yetNeeded;
-        uint ownersDone;
-    }
     // this contract only has five types of events: it can accept a confirmation, in which case
     // we record owner and operation (hash) alongside it.
     event Confirmation(address owner, hash operation);
@@ -87,7 +82,7 @@ contract multiowned {
         }
     }
     // Replaces an owner `_from` with another `_to`.
-    function changeOwner(address _from, address _to) onlymanyowners(sha3(msg.data)) {
+    function changeOwner(address _from, address _to) external onlymanyowners(sha3(msg.data)) {
         uint ownerIndex = m_ownerIndex[_from];
         if (ownerIndex == 0) return;
         if (isOwner(_to)) return;
@@ -97,7 +92,7 @@ contract multiowned {
         m_ownerIndex[_to] = ownerIndex;
         OwnerChanged(_from, _to);
     }
-    function addOwner(address _owner) onlymanyowners(sha3(msg.data)) {
+    function addOwner(address _owner) external onlymanyowners(sha3(msg.data)) {
         if (isOwner(_owner)) return;
 
         m_numOwners++;
@@ -105,7 +100,7 @@ contract multiowned {
         m_ownerIndex[_owner] = m_numOwners;
         OwnerAdded(_owner);
     }
-    function removeOwner(address _owner) onlymanyowners(sha3(msg.data)) {
+    function removeOwner(address _owner) external onlymanyowners(sha3(msg.data)) {
         uint ownerIndex = m_ownerIndex[_owner];
         if (ownerIndex == 0) return;
 
@@ -113,14 +108,19 @@ contract multiowned {
         m_ownerIndex[_owner] = 0;
         OwnerRemoved(_owner);
     }
-    function changeRequirement(uint _newRequired) onlymanyowners(sha3(msg.data)) {
+    function changeRequirement(uint _newRequired) external onlymanyowners(sha3(msg.data)) {
         m_required = _newRequired;
         RequirementChanged(_newRequired);
     }
-    function isOwner(address _addr) returns (bool) {
+    function isOwner(address _addr) protected returns (bool) {
         return m_ownerIndex[_addr] > 0;
     }
 
+    // struct for the status of a pending operation.
+    struct PendingState {
+        uint yetNeeded;
+        uint ownersDone;
+    }
     // the number of owners that must confirm the same operation before it is run.
     uint m_required;
     // pointer used to find a free slot in m_owners
@@ -142,7 +142,7 @@ contract daylimit is multiowned {
         m_lastDay = today();
     }
     // (re)sets the daily limit. needs many of the owners to confirm. doesn't alter the amount already spent today.
-    function setDailyLimit(uint _newLimit) onlymanyowners(sha3(msg.data)) {
+    function setDailyLimit(uint _newLimit) external onlymanyowners(sha3(msg.data)) {
         m_dailyLimit = _newLimit;
     }
     // (re)sets the daily limit. needs many of the owners to confirm. doesn't alter the amount already spent today.
@@ -177,20 +177,14 @@ contract daylimit is multiowned {
 }
 // interface contract for multisig proxy contracts.
 contract multisig {
-    function changeOwner(address _from, address _to) {}
-    function execute(address _to, uint _value/*, bytes _data*/) returns (hash) {}
-    function confirm(hash _h) returns (bool) {}
+    function changeOwner(address _from, address _to) external {}
+    function execute(address _to, uint _value, bytes _data) external returns (hash _r) {}
+    function confirm(hash _h) external returns (bool) {}
 }
 // usage:
 // hash h = Wallet(w).from(oneOwner).transact(to, value, data);
 // Wallet(w).from(anotherOwner).confirm(h);
 contract Wallet is multisig, multiowned, daylimit {
-    // Transaction structure to remember details of transaction lest it need be saved for a later call.
-    struct Transaction {
-        address to;
-        uint value;
-        bytes data;
-    }
     // logged events:
     // Funds has arrived into the wallet (record how much).
     event CashIn(uint value);
@@ -201,7 +195,7 @@ contract Wallet is multisig, multiowned, daylimit {
     // constructor - just pass on the owner arra to the multiowned.
     function Wallet() {}
     // kills the contract sending everything to `_to`.
-    function kill(address _to) onlymanyowners(sha3(msg.data)) {
+    function kill(address _to) external onlymanyowners(sha3(msg.data)) {
         suicide(_to);
     }
     // gets called when no other function matches
@@ -214,12 +208,12 @@ contract Wallet is multisig, multiowned, daylimit {
     // If not, goes into multisig process. We provide a hash on return to allow the sender to provide
     // shortcuts for the other confirmations (allowing them to avoid replicating the _to, _value
     // and _data arguments). They still get the option of using them if they want, anyways.
-    function execute(address _to, uint _value/*, bytes _data*/) returns (hash _r) {
+    function execute(address _to, uint _value, bytes _data) external returns (hash _r) {
         // first, take the opportunity to check that we're under the daily limit.
         if (underLimit(_value)) {
             SingleTransact("out", msg.sender, _value, _to);
             // yes - just execute the call.
-            _to.call.value(_value)(msg.data/*_data*/);
+            _to.call.value(_value)(_data);
             return 0;
         }
         // determine our operation hash.
@@ -227,12 +221,12 @@ contract Wallet is multisig, multiowned, daylimit {
         if (!confirm(_r) && m_txs[_r].to == 0) {
             m_txs[_r].to = _to;
             m_txs[_r].value = _value;
-            m_txs[_r].data = msg.data;//_data;
+            m_txs[_r].data = _data;
         }
     }
     // confirm a transaction through just the hash. we use the previous transactions map, m_txs, in order
     // to determine the body of the transaction from the hash provided.
-    function confirm(hash _h) onlymanyowners(_h) returns (bool) {
+    function confirm(hash _h) public onlymanyowners(_h) returns (bool) {
         if (m_txs[_h].to != 0) {
             m_txs[_h].to.call.value(m_txs[_h].value)(m_txs[_h].data);
             MultiTransact("out", msg.sender, _h, m_txs[_h].value, m_txs[_h].to);
@@ -240,12 +234,12 @@ contract Wallet is multisig, multiowned, daylimit {
             return true;
         }
     }
-    // // internally confirm transaction with all of the info. returns true iff confirmed good and executed.
-    // function confirmVerbose(hash _h, address _to, uint _value, bytes _data) private onlymanyowners(_h) returns (bool) {
-    //     _to.call.value(_value)(_data);
-    //     MultiTransact("out", msg.sender, _h, _value, _to);
-    //     return true;
-    // }
+    // Transaction structure to remember details of transaction lest it need be saved for a later call.
+    struct Transaction {
+        address to;
+        uint value;
+        bytes data;
+    }
     // pending transactions we have at present.
     mapping (hash => Transaction) m_txs;
 }
