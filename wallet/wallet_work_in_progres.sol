@@ -48,7 +48,7 @@ contract multiowned {
         if (confirmed(_operation))
             _
     }
-    function confirmed(hash _operation) protected returns (bool) {
+    function confirmed(hash _operation) inheritable returns (bool) {
         // determine what index the present sender is:
         uint ownerIndex = m_ownerIndex[msg.sender];
         // make sure they're an owner
@@ -112,7 +112,7 @@ contract multiowned {
         m_required = _newRequired;
         RequirementChanged(_newRequired);
     }
-    function isOwner(address _addr) protected returns (bool) {
+    function isOwner(address _addr) inheritable returns (bool) {
         return m_ownerIndex[_addr] > 0;
     }
 
@@ -151,7 +151,7 @@ contract daylimit is multiowned {
     }
     // checks to see if there is at least `_value` left from the daily limit today. if there is, subtracts it and
     // returns true. otherwise just returns false.
-    function underLimit(uint _value) protected onlyowner returns (bool) {
+    function underLimit(uint _value) inheritable onlyowner returns (bool) {
         // reset the spend limit if we're on a different day to last time.
         if (today() > m_lastDay) {
             m_spentToday = 0;
