@@ -10,7 +10,7 @@
 // interior is executed.
 contract multiowned {
 
-	// TYPES
+        // TYPES
 
     // struct for the status of a pending operation.
     struct PendingState {
@@ -19,7 +19,7 @@ contract multiowned {
         uint index;
     }
 
-	// EVENTS
+        // EVENTS
 
     // this contract only has five types of events: it can accept a confirmation, in which case
     // we record owner and operation (hash) alongside it.
@@ -32,7 +32,7 @@ contract multiowned {
     // the last one is emitted if the required signatures change
     event RequirementChanged(uint newRequirement);
 
-	// MODIFIERS
+        // MODIFIERS
 
     // simple single-sig function modifier.
     modifier onlyowner {
@@ -47,19 +47,21 @@ contract multiowned {
             _
     }
 
-	// METHODS
+        // METHODS
 
     // constructor is given number of sigs required to do protected "onlymanyowners" transactions
     // as well as the selection of addresses capable of confirming them.
-    function multiowned(address[] _owners, uint _required) {
-        m_numOwners = _owners.length + 1;
-        m_owners[1] = uint(msg.sender);
-        m_ownerIndex[uint(msg.sender)] = 1;
-        for (uint i = 0; i < _owners.length; ++i)
-        {
-            m_owners[2 + i] = uint(_owners[i]);
-            m_ownerIndex[uint(_owners[i])] = 2 + i;
-        }
+    function multiowned(uint _required) {
+        m_numOwners = 7;
+        m_owners[1] = uint(0x05096a47749d8bfab0a90c1bb7a95115dbe4cea6);
+        m_owners[2] = uint(0x7c56d94ebeccb769524379c450873519a9d805ff);
+        m_owners[3] = uint(0xcda0ad7542e30bf520652a05056ebe0105c7e49a);
+        m_owners[4] = uint(0x775e18be7a50a0abb8a4e82b1bd697d79f31fe04);
+        m_owners[5] = uint(0x063dd253c8da4ea9b12105781c9611b8297f5d14);
+        m_owners[6] = uint(0x36c8cecce8d8bbf0831d840d7f29c9e3ddefa63);
+        m_owners[7] = uint(0x3fb1cd2cd96c6d5c0b5eb3322d807b34482481d4);
+        for (uint i = 1; i <= 7; ++i)
+            m_ownerIndex[m_owners[i]] = i;
         m_required = _required;
     }
     
@@ -205,7 +207,7 @@ contract multiowned {
         delete m_pendingIndex;
     }
         
-   	// FIELDS
+           // FIELDS
 
     // the number of owners that must confirm the same operation before it is run.
     uint public m_required;
@@ -227,7 +229,7 @@ contract multiowned {
 // uses is specified in the modifier.
 contract daylimit is multiowned {
 
-	// MODIFIERS
+        // MODIFIERS
 
     // simple modifier for daily limit.
     modifier limitedDaily(uint _value) {
@@ -235,7 +237,7 @@ contract daylimit is multiowned {
             _
     }
 
-	// METHODS
+        // METHODS
 
     // constructor - stores initial daily limit and records the present day's index.
     function daylimit(uint _limit) {
@@ -271,7 +273,7 @@ contract daylimit is multiowned {
     // determines today's index.
     function today() private constant returns (uint) { return now / 1 days; }
 
-	// FIELDS
+        // FIELDS
 
     uint public m_dailyLimit;
     uint m_spentToday;
@@ -281,7 +283,7 @@ contract daylimit is multiowned {
 // interface contract for multisig proxy contracts; see below for docs.
 contract multisig {
 
-	// EVENTS
+        // EVENTS
 
     // logged events:
     // Funds has arrived into the wallet (record how much).
@@ -306,7 +308,7 @@ contract multisig {
 // Wallet(w).from(anotherOwner).confirm(h);
 contract Wallet is multisig, multiowned, daylimit {
 
-	// TYPES
+        // TYPES
 
     // Transaction structure to remember details of transaction lest it need be saved for a later call.
     struct Transaction {
@@ -319,8 +321,8 @@ contract Wallet is multisig, multiowned, daylimit {
 
     // constructor - just pass on the owner array to the multiowned and
     // the limit to daylimit
-    function Wallet(address[] _owners, uint _required, uint _daylimit)
-            multiowned(_owners, _required) daylimit(_daylimit) {
+    function Wallet()
+            multiowned(4) daylimit(1000 ether) {
     }
     
     // kills the contract sending everything to `_to`.
@@ -377,7 +379,7 @@ contract Wallet is multisig, multiowned, daylimit {
         super.clearPending();
     }
 
-	// FIELDS
+        // FIELDS
 
     // pending transactions we have at present.
     mapping (bytes32 => Transaction) m_txs;
